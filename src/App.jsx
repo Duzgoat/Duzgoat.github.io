@@ -57,7 +57,7 @@ export default function App() {
 
   function connectSocket(t, p) {
     if (socketRef.current) socketRef.current.disconnect()
-    const socket = io(SERVER_URL, { auth: { token: t } })
+    const socket = io(SERVER_URL, { auth: { token: t }, transports: ['polling', 'websocket'] })
     socketRef.current = socket
 
     socket.on('mine_result', ({ ore, rockHealth: rh, error, respawnAt }) => {
