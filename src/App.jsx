@@ -8,8 +8,6 @@ const STYLES = {
   input: { background: '#1a1a1a', border: '1px solid #333', color: '#f0f0f0', padding: '10px 14px', borderRadius: '4px', fontFamily: 'monospace', fontSize: '14px', width: '260px' },
   btn: { background: '#f0f0f0', color: '#0d0d0d', border: 'none', padding: '10px 20px', borderRadius: '4px', fontFamily: 'monospace', fontSize: '14px', cursor: 'pointer', fontWeight: 'bold' },
   btnDark: { background: '#1a1a1a', color: '#f0f0f0', border: '1px solid #333', padding: '10px 20px', borderRadius: '4px', fontFamily: 'monospace', fontSize: '14px', cursor: 'pointer' },
-  title: { fontSize: '2.5rem', fontWeight: 'bold', letterSpacing: '-0.03em', marginBottom: '8px' },
-  sub: { color: '#666', marginBottom: '16px', fontSize: '13px' },
   error: { color: '#ff4444', fontSize: '13px' },
   panel: { background: '#111', border: '1px solid #222', borderRadius: '6px', padding: '16px', marginBottom: '16px' },
   label: { color: '#666', fontSize: '12px', marginBottom: '4px' },
@@ -19,10 +17,80 @@ const STYLES = {
   log: { height: '120px', overflowY: 'auto', fontSize: '12px', color: '#888', display: 'flex', flexDirection: 'column-reverse' },
 }
 
+const NPC_PRICES = {
+  coal: 1, copper_ore: 5, tin_ore: 8, raw_quartz: 20,
+  iron_ore: 15, silver_ore: 40, malachite: 80, amethyst_shard: 200,
+  gold_ore: 120, obsidian: 150, ruby_fragment: 300, sapphire_fragment: 600,
+  platinum_ore: 400, void_stone: 800, diamond_rough: 2000,
+  ancient_fragment: 1200, worldstone_shard: 15000, core_crystal: 80000,
+}
+
+function InventoryPanel({ inventory, onSell, onClose }) {
+  const [sellAmounts, setSellAmounts] = useState({})
+  const items = Object.entries(inventory).filter(([, q]) => q > 0)
+
+  function handleSell(item) {
+    const qty = parseInt(sellAmounts[item]) || 0
+    if (qty <= 0) return
+    onSell(item, qty)
+    setSellAmounts(prev => ({ ...prev, [item]: '' }))
+  }
+
+  return (
+    <>
+      {/* backdrop */}
+      <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 10 }} />
+
+      {/* side panel */}
+      <div style={{
+        position: 'fixed', top: 0, right: 0, bottom: 0, width: '320px',
+        background: '#111', borderLeft: '1px solid #222', zIndex: 11,
+        display: 'flex', flexDirection: 'column',
+      }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px', borderBottom: '1px solid #222' }}>
+          <span style={{ fontWeight: 'bold', fontSize: '15px' }}>Inventory</span>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', color: '#666', fontSize: '18px', cursor: 'pointer' }}>✕</button>
+        </div>
+
+        <div style={{ flex: 1, overflowY: 'auto', padding: '12px 16px' }}>
+          {items.length === 0
+            ? <div style={{ color: '#444', fontSize: '13px', marginTop: '12px' }}>Nothing yet — start mining</div>
+            : items.map(([item, qty]) => (
+              <div key={item} style={{ padding: '10px 0', borderBottom: '1px solid #1a1a1a' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
+                  <span style={{ fontSize: '13px', textTransform: 'capitalize' }}>{item.replace(/_/g, ' ')}</span>
+                  <span style={{ fontSize: '13px', color: '#888' }}>{qty} &nbsp;<span style={{ color: '#444', fontSize: '11px' }}>{NPC_PRICES[item] ? `${NPC_PRICES[item]} BG ea` : ''}</span></span>
+                </div>
+                <div style={{ display: 'flex', gap: '6px' }}>
+                  <input
+                    type="number"
+                    min="1"
+                    max={qty}
+                    placeholder={`max ${qty}`}
+                    value={sellAmounts[item] || ''}
+                    onChange={e => setSellAmounts(prev => ({ ...prev, [item]: e.target.value }))}
+                    style={{ ...STYLES.input, width: '100%', padding: '6px 10px', fontSize: '12px' }}
+                  />
+                  <button
+                    onClick={() => handleSell(item)}
+                    style={{ ...STYLES.btnDark, padding: '6px 12px', fontSize: '12px', whiteSpace: 'nowrap' }}
+                  >
+                    Sell
+                  </button>
+                </div>
+              </div>
+            ))
+          }
+        </div>
+      </div>
+    </>
+  )
+}
+
 export default function App() {
   const [token, setToken] = useState(() => localStorage.getItem('bc_token'))
   const [player, setPlayer] = useState(null)
-  const [view, setView] = useState('login') // login | register | game
+  const [view, setView] = useState('login')
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
@@ -30,6 +98,7 @@ export default function App() {
   const [rockMax] = useState(10)
   const [log, setLog] = useState([])
   const [inventory, setInventory] = useState({})
+  const [invOpen, setInvOpen] = useState(false)
   const socketRef = useRef(null)
 
   const addLog = (msg) => setLog(prev => [msg, ...prev].slice(0, 50))
@@ -59,7 +128,7 @@ export default function App() {
     const socket = io(SERVER_URL, { auth: { token: t }, transports: ['polling', 'websocket'] })
     socketRef.current = socket
 
-    socket.on('mine_result', ({ ore, rockHealth: rh, error, respawnAt }) => {
+    socket.on('mine_result', ({ ore, rockHealth: rh, error }) => {
       if (error) { addLog(`Error: ${error}`); return }
       setRockHealth(rh)
       if (ore) {
@@ -74,7 +143,7 @@ export default function App() {
       addLog(`Sold for ${earned} BG`)
     })
 
-    socket.on('rock_shattered', ({ tier }) => {
+    socket.on('rock_shattered', () => {
       setRockHealth(0)
       addLog('Rock shattered!')
     })
@@ -101,11 +170,10 @@ export default function App() {
     socketRef.current.emit('mine_click', { tier: 'tier0' })
   }
 
-  function sellAll() {
+  function sell(item, qty) {
     if (!socketRef.current) return
-    Object.entries(inventory).forEach(([item, qty]) => {
-      if (qty > 0) socketRef.current.emit('npc_sell', { item_type: item, quantity: qty })
-    })
+    socketRef.current.emit('npc_sell', { item_type: item, quantity: qty })
+    setInventory(prev => ({ ...prev, [item]: Math.max(0, (prev[item] || 0) - qty) }))
   }
 
   function logout() {
@@ -116,8 +184,12 @@ export default function App() {
 
   if (view === 'game' && player) {
     const healthPct = Math.round((rockHealth / rockMax) * 100)
+    const totalItems = Object.values(inventory).reduce((s, q) => s + q, 0)
+
     return (
       <div style={STYLES.app}>
+        {invOpen && <InventoryPanel inventory={inventory} onSell={sell} onClose={() => setInvOpen(false)} />}
+
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
           <span style={{ fontWeight: 'bold', fontSize: '18px' }}>⛏ BitCraft</span>
           <span style={{ color: '#666', fontSize: '13px' }}>{player.username} &nbsp;
@@ -150,24 +222,16 @@ export default function App() {
             >
               🪨
             </div>
-            <div style={{ fontSize: '12px', color: '#555' }}>Click to mine</div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              <div style={{ fontSize: '12px', color: '#555' }}>Click to mine</div>
+              <button
+                onClick={() => setInvOpen(true)}
+                style={{ ...STYLES.btnDark, padding: '8px 14px', fontSize: '13px' }}
+              >
+                Inventory {totalItems > 0 ? `(${totalItems})` : ''}
+              </button>
+            </div>
           </div>
-        </div>
-
-        <div style={{ ...STYLES.panel, maxWidth: '600px' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
-            <div style={STYLES.label}>Inventory</div>
-            <button onClick={sellAll} style={{ ...STYLES.btnDark, padding: '4px 10px', fontSize: '12px' }}>Sell all (NPC)</button>
-          </div>
-          {Object.keys(inventory).length === 0
-            ? <div style={{ color: '#444', fontSize: '13px' }}>Nothing yet — start mining</div>
-            : Object.entries(inventory).filter(([, q]) => q > 0).map(([item, qty]) => (
-                <div key={item} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', padding: '3px 0', borderBottom: '1px solid #1a1a1a' }}>
-                  <span>{item.replace(/_/g, ' ')}</span>
-                  <span style={{ color: '#888' }}>{qty}</span>
-                </div>
-              ))
-          }
         </div>
 
         <div style={{ ...STYLES.panel, maxWidth: '600px' }}>
@@ -185,8 +249,8 @@ export default function App() {
 
   return (
     <div style={STYLES.center}>
-      <div style={STYLES.title}>⛏ BitCraft</div>
-      <div style={STYLES.sub}>{view === 'login' ? 'Sign in to your account' : 'Create your account'}</div>
+      <div style={{ fontSize: '2.5rem', fontWeight: 'bold', letterSpacing: '-0.03em', marginBottom: '8px' }}>⛏ BitCraft</div>
+      <div style={{ color: '#666', marginBottom: '16px', fontSize: '13px' }}>{view === 'login' ? 'Sign in to your account' : 'Create your account'}</div>
       <input style={STYLES.input} placeholder="username" value={username} onChange={e => setUsername(e.target.value)} />
       <input style={STYLES.input} type="password" placeholder="password" value={password} onChange={e => setPassword(e.target.value)}
         onKeyDown={e => e.key === 'Enter' && submit(view === 'login' ? 'login' : 'register')} />
