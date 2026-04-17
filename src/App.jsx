@@ -133,7 +133,12 @@ export default function App() {
       setRockHealth(rh)
       if (ore) {
         setInventory(prev => ({ ...prev, [ore]: (prev[ore] || 0) + 1 }))
-        addLog(`Found: ${ore.replace(/_/g, ' ')}`)
+        const ULTRA_RARE = ['worldstone_shard', 'diamond_rough', 'gold_ore', 'silver_ore']
+        const label = ore.replace(/_/g, ' ')
+        if (ore === 'worldstone_shard') addLog(`*** WORLDSTONE SHARD *** You found a worldstone shard!`)
+        else if (ore === 'diamond_rough') addLog(`** RARE ** Found: ${label}`)
+        else if (ULTRA_RARE.includes(ore)) addLog(`* Lucky! Found: ${label}`)
+        else addLog(`Found: ${label}`)
       }
     })
 
