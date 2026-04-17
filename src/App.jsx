@@ -28,7 +28,6 @@ export default function App() {
   const [error, setError] = useState('')
   const [rockHealth, setRockHealth] = useState(10)
   const [rockMax] = useState(10)
-  const [respawning, setRespawning] = useState(false)
   const [log, setLog] = useState([])
   const [inventory, setInventory] = useState({})
   const socketRef = useRef(null)
@@ -67,11 +66,6 @@ export default function App() {
         setInventory(prev => ({ ...prev, [ore]: (prev[ore] || 0) + 1 }))
         addLog(`Found: ${ore.replace(/_/g, ' ')}`)
       }
-      if (respawnAt) {
-        setRespawning(true)
-        const ms = respawnAt - Date.now()
-        setTimeout(() => setRespawning(false), Math.max(ms, 0))
-      }
     })
 
     socket.on('sell_result', ({ earned, bitgold, error }) => {
@@ -103,7 +97,7 @@ export default function App() {
   }
 
   function mine() {
-    if (!socketRef.current || respawning) return
+    if (!socketRef.current) return
     socketRef.current.emit('mine_click', { tier: 'tier0' })
   }
 
@@ -143,22 +137,20 @@ export default function App() {
         </div>
 
         <div style={{ ...STYLES.panel, maxWidth: '600px' }}>
-          <div style={STYLES.label}>Surface Rock — {respawning ? 'respawning...' : `${healthPct}% health`}</div>
+          <div style={STYLES.label}>Surface Rock — {healthPct}% health</div>
           <div style={{ height: '8px', background: '#222', borderRadius: '4px', margin: '8px 0 16px' }}>
-            <div style={{ height: '100%', width: `${healthPct}%`, background: respawning ? '#444' : '#f0f0f0', borderRadius: '4px', transition: 'width 0.1s' }} />
+            <div style={{ height: '100%', width: `${healthPct}%`, background: '#f0f0f0', borderRadius: '4px', transition: 'width 0.1s' }} />
           </div>
           <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
             <div
-              style={{ ...STYLES.rock, opacity: respawning ? 0.4 : 1 }}
+              style={STYLES.rock}
               onClick={mine}
               onMouseDown={e => e.currentTarget.style.transform = 'scale(0.93)'}
               onMouseUp={e => e.currentTarget.style.transform = 'scale(1)'}
             >
-              {respawning ? '💤' : '🪨'}
+              🪨
             </div>
-            <div style={{ fontSize: '12px', color: '#555' }}>
-              {respawning ? 'Waiting for respawn...' : 'Click to mine'}
-            </div>
+            <div style={{ fontSize: '12px', color: '#555' }}>Click to mine</div>
           </div>
         </div>
 
