@@ -132,9 +132,10 @@ export default function App() {
     const socket = io(SERVER_URL, { auth: { token: t }, transports: ['polling', 'websocket'] })
     socketRef.current = socket
 
-    socket.on('mine_result', ({ ore, rockHealth: rh, error }) => {
+    socket.on('mine_result', ({ ore, rockHealth: rh, shattered, error }) => {
       if (error) { addLog(`Error: ${error}`, null); return }
       setRockHealth(rh)
+      if (shattered) addLog('Rock shattered!', null)
       if (ore) {
         setInventory(prev => ({ ...prev, [ore]: (prev[ore] || 0) + 1 }))
         const { label: rarityLabel } = getRarity(ore)
@@ -144,14 +145,9 @@ export default function App() {
     })
 
     socket.on('sell_result', ({ earned, bitgold, error }) => {
-      if (error) { addLog(`Sell error: ${error}`); return }
+      if (error) { addLog(`Sell error: ${error}`, null); return }
       setPlayer(prev => ({ ...prev, bitgold }))
-      addLog(`Sold for ${earned} BG`)
-    })
-
-    socket.on('rock_shattered', () => {
-      setRockHealth(0)
-      addLog('Rock shattered!')
+      addLog(`Sold for ${earned} BG`, null)
     })
   }
 
