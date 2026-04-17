@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { io } from 'socket.io-client'
 import { SERVER_URL } from './api.js'
+import { getRarity } from './constants.js'
 
 const STYLES = {
   app: { minHeight: '100vh', background: '#0d0d0d', color: '#f0f0f0', fontFamily: 'monospace', padding: '24px' },
@@ -55,12 +56,15 @@ function InventoryPanel({ inventory, onSell, onClose }) {
         <div style={{ flex: 1, overflowY: 'auto', padding: '12px 16px' }}>
           {items.length === 0
             ? <div style={{ color: '#444', fontSize: '13px', marginTop: '12px' }}>Nothing yet — start mining</div>
-            : items.map(([item, qty]) => (
+            : items.map(([item, qty]) => {
+              const rarity = getRarity(item)
+              return (
               <div key={item} style={{ padding: '10px 0', borderBottom: '1px solid #1a1a1a' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
                   <span style={{ fontSize: '13px', textTransform: 'capitalize' }}>{item.replace(/_/g, ' ')}</span>
                   <span style={{ fontSize: '13px', color: '#888' }}>{qty} &nbsp;<span style={{ color: '#444', fontSize: '11px' }}>{NPC_PRICES[item] ? `${NPC_PRICES[item]} BG ea` : ''}</span></span>
                 </div>
+                <div style={{ fontSize: '11px', color: rarity.color, marginBottom: '6px', fontWeight: 'bold', letterSpacing: '0.05em' }}>{rarity.label}</div>
                 <div style={{ display: 'flex', gap: '6px' }}>
                   <input
                     type="number"
@@ -79,7 +83,7 @@ function InventoryPanel({ inventory, onSell, onClose }) {
                   </button>
                 </div>
               </div>
-            ))
+            )})}
           }
         </div>
       </div>
@@ -101,7 +105,7 @@ export default function App() {
   const [invOpen, setInvOpen] = useState(false)
   const socketRef = useRef(null)
 
-  const addLog = (msg) => setLog(prev => [msg, ...prev].slice(0, 50))
+  const addLog = (msg, item = null) => setLog(prev => [{ msg, item }, ...prev].slice(0, 50))
 
   useEffect(() => {
     if (token) loadPlayer(token)
@@ -129,16 +133,13 @@ export default function App() {
     socketRef.current = socket
 
     socket.on('mine_result', ({ ore, rockHealth: rh, error }) => {
-      if (error) { addLog(`Error: ${error}`); return }
+      if (error) { addLog(`Error: ${error}`, null); return }
       setRockHealth(rh)
       if (ore) {
         setInventory(prev => ({ ...prev, [ore]: (prev[ore] || 0) + 1 }))
-        const ULTRA_RARE = ['worldstone_shard', 'diamond_rough', 'gold_ore', 'silver_ore']
-        const label = ore.replace(/_/g, ' ')
-        if (ore === 'worldstone_shard') addLog(`*** WORLDSTONE SHARD *** You found a worldstone shard!`)
-        else if (ore === 'diamond_rough') addLog(`** RARE ** Found: ${label}`)
-        else if (ULTRA_RARE.includes(ore)) addLog(`* Lucky! Found: ${label}`)
-        else addLog(`Found: ${label}`)
+        const { label: rarityLabel } = getRarity(ore)
+        const name = ore.replace(/_/g, ' ')
+        addLog(`[${rarityLabel}] ${name}`, ore)
       }
     })
 
@@ -244,7 +245,10 @@ export default function App() {
           <div style={STYLES.log}>
             {log.length === 0
               ? <span style={{ color: '#333' }}>No activity yet</span>
-              : log.map((l, i) => <span key={i}>{l}</span>)
+              : log.map((entry, i) => {
+                  const color = entry.item ? getRarity(entry.item).color : '#888'
+                  return <span key={i} style={{ color }}>{entry.msg}</span>
+                })
             }
           </div>
         </div>
